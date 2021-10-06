@@ -10,8 +10,6 @@ import argparse
 # Suppress https warning (Burp)
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
-cert_path = '/etc/ssl/certs'
-
 
 class SSLCertReNew(object):
 
@@ -25,10 +23,12 @@ class SSLCertReNew(object):
         # run steps
         self.InitialRequest()
         self.VerificationMethods()
-        if self.status == 0:
+        self.VerificationStatus()
+        while self.status == 0:
             time.sleep(10)
-        else:
-            self.DownloadAndSave()
+            self.VerificationStatus()
+        time.sleep(5)
+        self.DownloadAndSave()
 
     def createCsr(self):
         req = f'''[ req ]
@@ -71,52 +71,69 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
                                        'certificate_csr': self.csr}
                                  )
         result = json.loads(response.text)
+        print()
+        print(f'Request Result: {result}')
+
         self.certHash = result['id']
         # url from json
-        self.HttpsUrl = result['validation']['other_methods'][f'{self.certificateDomain}']['file_validation_url_https']
-        self.HttpsContent = result['validation']['other_methods'][f'{self.certificateDomain}'][
+        self.HttpUrl = result['validation']['other_methods'][f'{self.certificateDomain}']['file_validation_url_http']
+        self.HttpContent = result['validation']['other_methods'][f'{self.certificateDomain}'][
             'file_validation_content']
-        self.dirOne = self.HttpsUrl.split('/')[-3]
-        self.dirTwo = self.HttpsUrl.split('/')[-2]
-        self.fileName = self.HttpsUrl.split('/')[-1]
+        self.dirOne = self.HttpUrl.split('/')[-3]
+        self.dirTwo = self.HttpUrl.split('/')[-2]
+        self.fileName = self.HttpUrl.split('/')[-1]
+
+        self.DocumentRoot = f'/var/www/{self.certificateDomain}/web'
+        self.CertPath = f'/var/www/{self.certificateDomain}/ssl'
+
+        # handle the symlinks (if any)
+        if Path(f'{self.DocumentRoot}').is_symlink():
+            self.DocumentRoot = Path(f'{self.DocumentRoot}').resolve()
+            self.CertPath = f'{self.DocumentRoot}/ssl'
+
         # create directories for validation
-        Path(f'/var/www/{self.certificateDomain}/{self.dirOne}/{self.dirTwo}').mkdir(parents=True, exist_ok=True)
+        Path(f'{self.DocumentRoot}/{self.dirOne}/{self.dirTwo}').mkdir(parents=True, exist_ok=True)
         # save file
         # convert array into string with newline
         string = '\n'.join(
             result['validation']['other_methods'][f'{self.certificateDomain}']['file_validation_content'])
-        with open(f'/var/www/{self.certificateDomain}/{self.dirOne}/{self.dirTwo}/{self.fileName}', 'w') as f:
+        with open(f'{self.DocumentRoot}/{self.dirOne}/{self.dirTwo}/{self.fileName}', 'w') as f:
             f.write(string)
 
     def VerificationMethods(self):
         """
-        Ask ZeroSSL to use HTTPS validation method
+        Ask ZeroSSL to use HTTP validation method
         """
         response = requests.post(self.url + f'/certificates/{self.certHash}/challenges?access_key={self.apiKey}',
-                                 proxies=self.proxies, data={'validation_method': 'HTTPS_CSR_HASH'})
+                                 proxies=self.proxies, data={'validation_method': 'HTTP_CSR_HASH'})
+        result = json.loads(response.text)
+        print()
+        print(f'Verification Result: {result}')
 
     def VerificationStatus(self):
-        response = requests.post(self.url + f'/certificates/{self.certHash}/status?access_key={self.apiKey}',
+        response = requests.get(self.url + f'/certificates/{self.certHash}/status?access_key={self.apiKey}',
                                  proxies=self.proxies)
         result = json.loads(response.text)
+        print()
+        print(f'Verification Status: {result}')
         self.status = result['validation_completed']
 
     def DownloadAndSave(self):
-        response = requests.get(self.url + f'/certificates/{self.certHash}/download/return?access_key={self.apiKey}',
-                                verify=False)
+        response = requests.get(self.url + f'/certificates/{self.certHash}/download/return?access_key={self.apiKey}')
         result = json.loads(response.text)
-
+        print()
+        print(f'Certificate: {result}')
         ca_bundle = result['ca_bundle.crt']
         cert = result['certificate.crt']
 
-        with open('{cert_path}/{self.certificateDomain}_cert.pem', 'w+') as f:
+        with open(f'{self.CertPath}/{self.certificateDomain}_cert.pem', 'w+') as f:
             f.write(cert)
 
-        with open('{cert_path}/{self.certificateDomain}_ca.pem', 'w+') as f:
+        with open(f'{self.CertPath}/{self.certificateDomain}_ca.pem', 'w+') as f:
             f.write(ca_bundle)
 
         # move private key
-        shutil.move(f'{self.certificateDomain}_key.pem', f'{cert_path}/{self.certificateDomain}_key.pem')
+        shutil.move(f'{self.certificateDomain}_key.pem', f'{self.CertPath}/{self.certificateDomain}_key.pem')
 
 
 def parse_args():
@@ -141,8 +158,7 @@ def parse_args():
     return domains, api_key
 
 
-domains = parse_args()[0]
-api_key = parse_args()[1]
+domains, api_key = parse_args()
 
 for domain in domains:
     obj = SSLCertReNew(api_key, domain)
