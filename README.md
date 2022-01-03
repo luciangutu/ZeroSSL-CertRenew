@@ -1,8 +1,11 @@
 # ZeroSSL-CertRenew
-A python script that automatically renews the certificate on ZeroSSL
+A Python script that automatically renews the certificate on ZeroSSL.
 
-The script assumes that certificates are stored under /etc/ssl/certs/
-The script assumes that the www-root/DocumentRoot is stored in /var/www/<domain.com>/web/ and the certificates are under /var/www/<domain.com>/ssl/
+
+Requirements:
+- certificates are stored under /etc/ssl/certs/
+- www-root/DocumentRoot is stored in /var/www/<domain.com>/web/ and the certificates are under /var/www/<domain.com>/ssl/
+- Python 3
 
 OpenSSL is used to create the private key and csr.
 
@@ -10,4 +13,6 @@ There is no exception handling anywhere in the code, so things might not be stab
 
 Execute the script with
 
-	python3 ZeroSSL_CertRenew.py -h
+	$ python3 ZeroSSL_CertRenew.py -h
+	# systemctl reload apache2
+	
