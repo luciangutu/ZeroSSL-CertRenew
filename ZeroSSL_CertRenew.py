@@ -43,13 +43,14 @@ req_extensions = req_ext
 CN = {self.certificateDomain}
 emailAddress = postmaster@{self.certificateDomain}
 O = Non Profit
-OU = SomeOrganization
-L = Meran
-ST = Suedtirol
-C = IT
+OU = Climb
+L = Bucharest
+ST = Bucharest
+C = RO
 
 [ req_ext ]
-subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain}'''
+subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain}
+'''
 
         # save file domain.conf
         # create blank file
@@ -112,7 +113,7 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
 
     def VerificationStatus(self):
         response = requests.get(self.url + f'/certificates/{self.certHash}/status?access_key={self.apiKey}',
-                                 proxies=self.proxies)
+                                proxies=self.proxies)
         result = json.loads(response.text)
         print()
         print(f'Verification Status: {result}')
@@ -146,16 +147,16 @@ def parse_args():
                         required=True)
     args = parser.parse_args()
     if args.Domains:
-        domains = args.Domains.split(",")
+        _domains = args.Domains.split(",")
     else:
         # this should not happen
-        domains = []
+        _domains = []
     if args.ApiKey:
-        api_key = args.ApiKey
+        _api_key = args.ApiKey
     else:
         # this should not happen
-        api_key = None
-    return domains, api_key
+        _api_key = None
+    return _domains, _api_key
 
 
 domains, api_key = parse_args()
