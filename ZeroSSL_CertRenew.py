@@ -14,21 +14,16 @@ requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 class SSLCertReNew(object):
 
     def __init__(self, apiKey, domain):
+        self.CertPath = None
+        self.HttpContent = None
+        self.HttpUrl = None
+        self.certHash = None
         self.url = 'https://api.zerossl.com'
         # self.proxies = { 'http' : 'http://127.0.0.1:8080', 'https' : 'http://127.0.0.1:8080' } # for testing purposes with Burp
         self.proxies = None
         self.apiKey = apiKey
         self.certificateDomain = domain
         self.csr = self.createCsr()
-        # run steps
-        self.InitialRequest()
-        self.VerificationMethods()
-        self.VerificationStatus()
-        while self.status == 0:
-            time.sleep(10)
-            self.VerificationStatus()
-        time.sleep(5)
-        self.DownloadAndSave()
 
     def createCsr(self):
         req = f'''[ req ]
@@ -80,25 +75,25 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
         self.HttpUrl = result['validation']['other_methods'][f'{self.certificateDomain}']['file_validation_url_http']
         self.HttpContent = result['validation']['other_methods'][f'{self.certificateDomain}'][
             'file_validation_content']
-        self.dirOne = self.HttpUrl.split('/')[-3]
-        self.dirTwo = self.HttpUrl.split('/')[-2]
-        self.fileName = self.HttpUrl.split('/')[-1]
+        dirOne = self.HttpUrl.split('/')[-3]
+        dirTwo = self.HttpUrl.split('/')[-2]
+        fileName = self.HttpUrl.split('/')[-1]
 
-        self.DocumentRoot = f'/var/www/{self.certificateDomain}/web'
+        DocumentRoot = f'/var/www/{self.certificateDomain}/web'
         self.CertPath = f'/var/www/{self.certificateDomain}/ssl'
 
         # handle the symlinks (if any)
-        if Path(f'{self.DocumentRoot}').is_symlink():
-            self.DocumentRoot = Path(f'{self.DocumentRoot}').resolve()
-            self.CertPath = f'{self.DocumentRoot}/ssl'
+        if Path(f'{DocumentRoot}').is_symlink():
+            DocumentRoot = Path(f'{DocumentRoot}').resolve()
+            self.CertPath = f'{DocumentRoot}/ssl'
 
         # create directories for validation
-        Path(f'{self.DocumentRoot}/{self.dirOne}/{self.dirTwo}').mkdir(parents=True, exist_ok=True)
+        Path(f'{DocumentRoot}/{dirOne}/{dirTwo}').mkdir(parents=True, exist_ok=True)
         # save file
         # convert array into string with newline
         string = '\n'.join(
             result['validation']['other_methods'][f'{self.certificateDomain}']['file_validation_content'])
-        with open(f'{self.DocumentRoot}/{self.dirOne}/{self.dirTwo}/{self.fileName}', 'w') as f:
+        with open(f'{DocumentRoot}/{dirOne}/{dirTwo}/{fileName}', 'w') as f:
             f.write(string)
 
     def VerificationMethods(self):
@@ -117,7 +112,14 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
         result = json.loads(response.text)
         print()
         print(f'Verification Status: {result}')
-        self.status = result['validation_completed']
+        return result['validation_completed']
+
+    def ListCertificates(self, certificate_status="issued"):
+        response = requests.get(self.url + f'/certificates?access_key={self.apiKey}&certificate_status='
+                                           f'{certificate_status}&search={self.certificateDomain}',
+                                proxies=self.proxies)
+        result = json.loads(response.text)
+        return result
 
     def DownloadAndSave(self):
         response = requests.get(self.url + f'/certificates/{self.certHash}/download/return?access_key={self.apiKey}')
@@ -159,7 +161,23 @@ def parse_args():
     return _domains, _api_key
 
 
-domains, api_key = parse_args()
+def main():
+    domains, api_key = parse_args()
 
-for domain in domains:
-    obj = SSLCertReNew(api_key, domain)
+    for domain in domains:
+        obj = SSLCertReNew(api_key, domain)
+        # if the cert is expired for domain, just renew it
+
+        # run steps for creating new cert
+        obj.InitialRequest()
+        obj.VerificationMethods()
+        # check validation status
+        while obj.VerificationStatus() == 0:
+            time.sleep(10)
+            obj.VerificationStatus()
+        time.sleep(5)
+        obj.DownloadAndSave()
+
+
+if __name__ == "__main__":
+    main()
