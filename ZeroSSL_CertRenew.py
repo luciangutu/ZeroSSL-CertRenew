@@ -67,8 +67,7 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
                                        'certificate_csr': self.csr}
                                  )
         result = json.loads(response.text)
-        print()
-        print(f'Request Result: {result}')
+        print(json.dumps(result, sort_keys=True, indent=4))
 
         self.certHash = result['id']
         # url from json
@@ -103,15 +102,13 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
         response = requests.post(self.url + f'/certificates/{self.certHash}/challenges?access_key={self.apiKey}',
                                  proxies=self.proxies, data={'validation_method': 'HTTP_CSR_HASH'})
         result = json.loads(response.text)
-        print()
-        print(f'Verification Result: {result}')
+        print(json.dumps(result, sort_keys=True, indent=4))
 
     def VerificationStatus(self):
         response = requests.get(self.url + f'/certificates/{self.certHash}/status?access_key={self.apiKey}',
                                 proxies=self.proxies)
         result = json.loads(response.text)
-        print()
-        print(f'Verification Status: {result}')
+        print(json.dumps(result, sort_keys=True, indent=4))
         return result['validation_completed']
 
     def ListCertificates(self, certificate_status="issued"):
@@ -124,8 +121,8 @@ subjectAltName = DNS: www.{self.certificateDomain}, DNS: {self.certificateDomain
     def DownloadAndSave(self):
         response = requests.get(self.url + f'/certificates/{self.certHash}/download/return?access_key={self.apiKey}')
         result = json.loads(response.text)
-        print()
-        print(f'Certificate: {result}')
+        print('Certificate:')
+        print(json.dumps(result, sort_keys=True, indent=4))
         ca_bundle = result['ca_bundle.crt']
         cert = result['certificate.crt']
 
